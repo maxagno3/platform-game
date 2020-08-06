@@ -153,10 +153,10 @@ const levelChars = {
   "#": "wall",
   "+": "lava",
   "@": Player,
-  'o': Coin,
+  o: Coin,
   "=": Lava,
   "|": Lava,
-  'v': Lava,
+  v: Lava,
 };
 
 // Creating level instance.
@@ -277,12 +277,58 @@ Level.prototype.touches = function (pos, size, type) {
   let yStart = Math.floor(pos.y);
   let yEnd = Math.ceil(pos.y + size.y);
 
-  for (let y = 0; y < yEnd; y++){
-    for (let x = 0; x < xEnd; x++){
+  for (let y = 0; y < yEnd; y++) {
+    for (let x = 0; x < xEnd; x++) {
       let isOutside = x < 0 || x >= this.width || y < 0 || y >= this.height;
-      let here = isOutside ? 'wall' : this.rows[y][x];
+      let here = isOutside ? "wall" : this.rows[y][x];
       if (here == type) return true;
     }
   }
   return false;
+};
+
+// State update method -> whether player is touching the lava.
+// time -> time step.
+// keys -> which keys are being held down.
+State.prototype.update = function (time, keys) {
+  let actors = this.actors.map((actor) => actor.update(time, this, keys));
+  let newState = new State(this.level, actors, this.status);
+
+  // if the game is already over, no further processing has to be done.
+  if (newState.status != "playing") return newState;
+
+  let player = newState.player;
+
+  // testing if the player is touching the lava.
+  if (this.level.touches(player.pos, player.size, "lava")) {
+    return new State(this.level, actors, "lost");
+  }
+
+  // seeing if any other actors overlap the players if the game is still going on.
+  for (let actor of actors) {
+    if (actor != player && overlap(actor, player)) {
+      newState = actor.collide(newState);
+    }
+  }
+  return newState;
+};
+
+function overlap(actor1, actor2) {
+  return (
+    actor1.pos.x + actor1.size.x > actor2.pos.x &&
+    actor1.pos.x < actor2.pos.x + actor2.size.x &&
+    actor1.pos.y + actor1.size.y > actor2.pos.y &&
+    actor1.pos.y < actor2.pos.y + actor2.size.y
+  );
+}
+
+Lava.prototype.collide = function (state) {
+  return new State(state.level, state.actors, "lost");
+};
+
+Coin.prototype.collide = function (state) {
+  let filtered = state.actors.filter((a) => a != this);
+  let status = state.status;
+  if (!filtered.some((a) => a.type === "coin")) status = "won";
+  return new State(state.level, filtered, status);
 };
